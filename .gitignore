@@ -1,0 +1,18 @@
+Experts
+Files
+Images
+Include
+Indicators
+Libraries
+Logs
+Profiles
+Services
+Shared Projects
+*.ex5
+*.mq5
+*.mqh
+*.dat
+*.cl
+*.mqproj
+*.hlsl
+!Scripts/Experts
