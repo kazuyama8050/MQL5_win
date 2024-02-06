@@ -16,3 +16,4 @@ Shared Projects
 *.mqproj
 *.hlsl
 !Scripts/Experts
+*.pyc
