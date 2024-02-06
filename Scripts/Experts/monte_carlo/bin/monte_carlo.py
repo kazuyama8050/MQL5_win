@@ -4,6 +4,9 @@ import time
 from datetime import datetime, timedelta
 import pandas as pd
 import joblib
+from argparse import ArgumentParser
+import configparser
+import socket
 
 APP_NAME = "expert_monte_carlo"
 current_script_path = os.path.abspath(__file__)
@@ -16,6 +19,7 @@ sys.path.append(os.path.join(APP_DIR, "service"))
 sys.path.append(os.path.join(APP_DIR, "model"))
 
 from logger import Logger
+from socket_handler import SocketHandler
 from account_handler import AccountHandler
 from symbol_handler import SymbolHandler
 from trade_handler import TradeHandler
@@ -28,7 +32,7 @@ from monte_carlo_service import MonteCarloService
 from feature_formatter_service import FeatureFormatterService
 
 model_conf = configparser.ConfigParser()
-model_conf.read(os.path.join(app_dir, "conf/monte_carlo_model.conf"))
+model_conf.read(os.path.join(APP_DIR, "conf/monte_carlo_model.conf"))
 
 def get_options():
     usage = "usage: %prog (Argument-1) [options]"
@@ -39,20 +43,23 @@ def get_options():
     parser.add_argument("-l", "--base_lot", dest="base_lot", action="store", help="base_lot", default=0.01, type=float)
     parser.add_argument("-m", "--model_type", dest="model_type", action="store", help="model_type", default="decision_tree", type=str)
     parser.add_argument("-g", "--magic_number", dest="magic_number", action="store", help="magic_number", default=100000, type=int)
-    parser.add_argument("-f", "--force_stopped_flag", dest="force_stopped_flag", action="store", help="force_stopped_flag", default=False, type=int)
+    parser.add_argument("-a", "--account_id", dest="account_id", action="store", help="account_id", required=True, type=int)
+    parser.add_argument("-o", "--socket_port", dest="socket_port", action="store", help="socket_port", default=1024, type=int)
     return parser.parse_args()
 
 options = get_options()
 
-ACCOUNT_ID = 75079798
-ACCOUNT_PASS = "NTK2njaydu@"
+ACCOUNT_ID = options.account_id
+ACCOUNT_PASS = input("Enter Password: ")
 SERVER = "XMTrading-MT5 3"
 SYMBOL = options.symbol
 BASE_PIPS = options.base_pips
 BASE_LOT = options.base_lot
 TRAIN_TERM = options.train_term
 MAGIC_NUMBER = options.magic_number
-FORCE_STOPPED_FLAG = options.force_stopped_flag
+SOCKET_HOST = "127.0.0.1"
+SOCKET_PORT = options.socket_port
+
 SLEEP_TIME = 5
 
 
@@ -68,29 +75,39 @@ tradeHandler = TradeHandler(Logger)
 positionHandler = PositionHandler(SYMBOL, MAGIC_NUMBER)
 monteCarloModel = MonteCarloModel(BASE_LOT)
 monteCarloService = MonteCarloService(SYMBOL, BASE_PIPS, MAGIC_NUMBER)
+# socketHandler = SocketHandler(SOCKET_HOST, SOCKET_PORT)
 
 positions = []  ## ポジション情報配列（分解モンテカルロ法による数列がリセットされるとリセット）
 trained_model = None
+latest_symbol_timesec = None
+force_stop_flag = False
 tradeHistoriesModel = TradeHistoriesModel()
 
 
 def main():
+    global positions
+    global latest_symbol_timesec
+
     try:
         if monteCarloModel.get_size() == 0: ## サイズが0の場合はリセット
             monteCarloModel.reset()
-            if FORCE_STOPPED_FLAG == 1:
-                logger.info("Monte Carlo Size is 0 and Force Stopped Flag On")
-                return 1
+            positions = []
+            if force_stop_flag == 1:
+                Logger.info("Monte Carlo Size is 0 and Force Stopped Flag On")
+                return 0
 
         if monteCarloModel.get_size() == 1: ## サイズが1の場合は分解
             monteCarloModel.decompose()
 
-        if symbolHandler.is_market_open() == False:  ## 市場が正常に開いていないときはスリープ
+        symbol_timesec_now = symbolHandler.get_latest_time_msc()
+        if latest_symbol_timesec >= symbol_timesec_now:  ## 市場が正常に開いていない（価格が更新されていない）ときはスリープ
+            print("市場閉鎖")
             time.sleep(60)
             return 1
+        
+        latest_symbol_timesec = symbol_timesec_now
 
         if positionHandler.get_position_size_by_symbol_magic() == 0:
-            modelpath = model_conf.get(MODEL_TYPE, "modelpath")
             if MODEL_TYPE == "decision_tree":
                 feature_df = _get_symbol_info_for_decision_tree_model()
                             
@@ -158,7 +175,6 @@ def main():
 
         return 1
     except Exception as e:
-        Logger.error("異常終了\n\n{}".format(traceback.format_exc()))
         return 0
     
 def _get_symbol_info_for_decision_tree_model():
@@ -182,39 +198,59 @@ def _get_symbol_info_for_decision_tree_model():
     return symbol_price_df
 
 def init():
+    global latest_symbol_timesec
+    global trained_model
+    global positions
+
     accountHandler.login()
-    positions = []
-    trained_model = joblib.load(modelpath)
-
-try:
-    mt5.initialize()
-    Logger.notice("start expert {}".format(APP_NAME))
+    if symbolHandler.is_trade_mode_full() == False:
+        Logger.error("Symbol Trade Mode Invalid.")
+        return 0
     
-    init()
+    latest_symbol_timesec = symbolHandler.get_latest_time_msc()
+    
+    positions = []
+    modelpath = os.path.join(APP_DIR, model_conf.get(MODEL_TYPE, "modelpath").format(symbol=SYMBOL, term=TRAIN_TERM, base_pips=str(BASE_PIPS).replace(".", "")))
+    # trained_model = joblib.load(modelpath)
 
-    replaced_day = datetime.now().day
-    loop_cnt = 0
-    while True:
-        start_time = time.time()
-        now = datetime.now()
-        if main() == 0:
-            break
+    return 1
+
+if __name__ == "__main__":
+    try:
+        mt5.initialize()
+        Logger.notice("start expert {}".format(APP_NAME))
         
-        if loop_cnt % 100:
-            margin_rate = mt5.account_info().margin
-            tradeHistoriesModel.check_and_replace_min_margin_rate(margin_rate)
+        if init() == 0:
+            raise Exception("Failed Init EA")
 
-        if now.hour == 0 and now.minute == 0 and now.day != replaced_day:
-            replaced_day = now.day
-            monteCarloService.mail_daily_summary()
+        replaced_day = datetime.now().day
+        loop_cnt = 0
+        while True:
+            start_time = time.time()
+            now = datetime.now()
+            if main() == 0:
+                break
 
-        loop_cnt += 1
+            # if socketHandler.is_recv_force_stop_cmd() is True:
+            #     force_stop_flag = True
+            
+            if loop_cnt % 100:
+                margin_rate = mt5.account_info().margin
+                tradeHistoriesModel.check_and_replace_min_margin_rate(margin_rate)
 
-        elapsed_time = time.time() - start_time
-        if elapsed_time > SLEEP_TIME: time.sleep(SLEEP_TIME - elapsed_time)
+            if now.hour == 0 and now.minute == 0 and now.day != replaced_day:
+                replaced_day = now.day
+                monteCarloService.mail_daily_summary()
 
-    Logger.notice("shutdown expert {}".format(APP_NAME))
-    mt5.shutdown()
-except:
-    mt5.shutdown()
-    sys.exit()
+            loop_cnt += 1
+
+            elapsed_time = time.time() - start_time
+            if elapsed_time < SLEEP_TIME: time.sleep(SLEEP_TIME - elapsed_time)
+
+        Logger.notice("shutdown expert {}".format(APP_NAME))
+    except:
+        Logger.error("異常終了\n\n{}".format(traceback.format_exc()))
+    finally:
+        # socketHandler.close()
+        mt5.shutdown()
+        sys.exit()
