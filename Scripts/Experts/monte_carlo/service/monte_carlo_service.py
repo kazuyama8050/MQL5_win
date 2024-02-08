@@ -23,9 +23,9 @@ class MonteCarloService():
         self._magic_number = magic_number
         self._symbolHandler = SymbolHandler(self._symbol)
 
-    def calc_trade_flag(self):
-        latest_prices_by_one_min = self._symbolHandler.get_prices_by_pos(mt5.TIMEFRAME_M1, 100)
-        return PositionModel.BUYING_FLAG
+    def calc_trade_flag(self, model, feature_df):
+        pred = model.predict(feature_df)
+        return PositionModel.BUYING_FLAG if pred >= 0.5 else PositionModel.SELLING_FLAG
     
     def calc_settlement(self, latest_position_trade_flag: int, latest_price: float, latest_position_price: float):
         is_settlement = False
@@ -47,8 +47,7 @@ class MonteCarloService():
 
         return is_settlement, is_benefit
     
-    def create_order_request(self, lot: int, comment: str):
-        trade_flag = self.calc_trade_flag()
+    def create_order_request(self, trade_flag: int, lot: int, comment: str):
         order_type = mt5.ORDER_TYPE_BUY if trade_flag == PositionModel.BUYING_FLAG else mt5.ORDER_TYPE_SELL
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
