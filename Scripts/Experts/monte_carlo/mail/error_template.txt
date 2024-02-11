@@ -1,0 +1,8 @@
+Account: {account}
+TradeMode: {trade_mode}
+ExpertName: {expert_name}
+Symbol: {symbol}
+
+---------------------------------
+
+{msg}

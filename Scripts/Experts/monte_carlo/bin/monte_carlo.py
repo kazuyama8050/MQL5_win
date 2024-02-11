@@ -22,6 +22,7 @@ sys.path.append(os.path.join(APP_DIR, "model"))
 
 from logger import Logger
 from socket_handler import SocketHandler
+from mail_handler import MailHandler
 from account_handler import AccountHandler
 from symbol_handler import SymbolHandler
 from trade_handler import TradeHandler
@@ -35,6 +36,8 @@ from feature_formatter_service import FeatureFormatterService
 
 model_conf = configparser.ConfigParser()
 model_conf.read(os.path.join(APP_DIR, "conf/monte_carlo_model.conf"))
+conf = configparser.ConfigParser()
+conf.read(os.path.join(APP_DIR, "conf/monte_carlo.conf"))
 
 logger = Logger.get_logger(APP_DIR, APP_NAME)
 
@@ -211,8 +214,11 @@ def init():
     latest_symbol_timesec = symbolHandler.get_latest_time_msc()
     
     positions = []
+
+    logger.info("Read Trained Model Start.")
     modelpath = os.path.join(APP_DIR, model_conf.get(MODEL_TYPE, "modelpath").format(symbol=SYMBOL, term=TRAIN_TERM, base_pips=str(BASE_PIPS).replace(".", "")))
-    # trained_model = joblib.load(modelpath)
+    trained_model = joblib.load(modelpath)
+    logger.info("Read Trained Model Done.")
 
     return 1
 
@@ -277,6 +283,19 @@ if __name__ == "__main__":
         logger.info("shutdown expert {}".format(APP_NAME))
     except Exception as e:
         logger.error("異常終了\n{0}\n{1}".format(e, traceback.format_exc()))
+        body_template = MailHandler.read_mail_body_template(conf.get("mail", "error_template_path"))
+        ret = MailHandler.send_mail(
+            "エラー発生のた異常終了",
+            body_template.format(
+                account=ACCOUNT_ID,
+                trade_mode=AccountHandler.to_trade_mode_jp(mt5.account_info().trade_mode),
+                expert_name=APP_NAME,
+                symbol=SYMBOL,
+                msg="異常終了\n{0}\n{1}".format(e, traceback.format_exc())
+            )
+        )
+        if ret == 0:
+            logger.error("エラーメール送信に失敗しました。")
     finally:
         mt5.shutdown()
         logger.info("End expert {}".format(APP_NAME))

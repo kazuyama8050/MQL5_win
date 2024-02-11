@@ -19,3 +19,14 @@ class AccountHandler():
         else:
             self._logger.critical("ログインに失敗しました。 アカウント: {}".format(self._account))
             raise Exception()
+        
+    @staticmethod
+    def to_trade_mode_jp(trade_mode):
+        trade_mode_jp_dict = {
+            mt5.ACCOUNT_TRADE_MODE_DEMO: "デモ口座",
+            mt5.ACCOUNT_TRADE_MODE_CONTEST: "コンテスト口座",
+            mt5.ACCOUNT_TRADE_MODE_REAL: "リアル口座"
+        }
+        if trade_mode in trade_mode_jp_dict.keys():
+            return trade_mode_jp_dict[trade_mode]
+        return "予期せぬ口座種別"
