@@ -5,7 +5,7 @@ import datetime
 class Logger():
     @staticmethod
     def get_logger(app_dir, app_name):
-        log_format = logging.Formatter(fmt=None, datefmt=None, style='%')
+        log_format = logging.Formatter(fmt="%(asctime)s\t%(levelname)s\t%(message)s", datefmt=None, style='%')
         logger = logging.getLogger()
         logger.setLevel(logging.INFO)
         
@@ -14,10 +14,11 @@ class Logger():
         logger.addHandler(stdout_handler)
         
         log_filename = app_name + datetime.datetime.today().strftime("%Y%m%d")
-        file_handler = logging.TimedRotatingFileHandler(
-            os.path.join(app_dir, "log", log_filename + ".log"), "a+",
+        file_handler = TimedRotatingFileHandler(
+            filename=os.path.join(app_dir, "log", log_filename + ".log"),
             when="D",
             interval=31,
+            backupCount=5,
             encoding="utf-8"
         )
         file_handler.setFormatter(log_format)

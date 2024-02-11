@@ -36,7 +36,7 @@ from feature_formatter_service import FeatureFormatterService
 model_conf = configparser.ConfigParser()
 model_conf.read(os.path.join(APP_DIR, "conf/monte_carlo_model.conf"))
 
-logger = Logger(APP_DIR, APP_HOME)
+logger = Logger.get_logger(APP_DIR, APP_NAME)
 
 def get_options():
     usage = "usage: %prog (Argument-1) [options]"
@@ -104,7 +104,7 @@ def main_process():
 
         symbol_timesec_now = symbolHandler.get_latest_time_msc()
         if latest_symbol_timesec >= symbol_timesec_now:  ## 市場が正常に開いていない（価格が更新されていない）ときはスリープ
-            print("市場閉鎖")
+            logger.info("市場閉鎖")
             time.sleep(60)
             return 1
         
