@@ -32,6 +32,7 @@ def main():
         # ソケットを閉じる
         if client_socket is not None:
             client_socket.close()
+        sys.exit(0)
             
 if __name__ == "__main__":
     main()

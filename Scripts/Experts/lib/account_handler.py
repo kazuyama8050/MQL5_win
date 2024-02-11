@@ -19,3 +19,4 @@ class AccountHandler():
             Logger.notice("ログインに成功しました。 アカウント: {}".format(self._account))
         else:
             Logger.crit("ログインに失敗しました。 アカウント: {}".format(self._account))
+            raise Exception()

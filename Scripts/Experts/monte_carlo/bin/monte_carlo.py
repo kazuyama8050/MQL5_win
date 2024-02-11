@@ -7,6 +7,8 @@ import joblib
 from argparse import ArgumentParser
 import configparser
 import socket
+import asyncio
+import threading
 
 APP_NAME = "expert_monte_carlo"
 current_script_path = os.path.abspath(__file__)
@@ -78,13 +80,13 @@ monteCarloService = MonteCarloService(SYMBOL, BASE_PIPS, MAGIC_NUMBER)
 # socketHandler = SocketHandler(SOCKET_HOST, SOCKET_PORT)
 
 positions = []  ## ポジション情報配列（分解モンテカルロ法による数列がリセットされるとリセット）
-trained_model = None
-latest_symbol_timesec = None
-force_stop_flag = False
+trained_model = None  ## 機械学習モデル init()で定義
+latest_symbol_timesec = None  ## シンボルの最新更新時間をもとに市場が開いているか判断する
+force_stop_flag = False  ## Trueになるとポジション情報配列がなくなった場合にプロセスを終了する
 tradeHistoriesModel = TradeHistoriesModel()
 
 
-def main():
+def main_process():
     global positions
     global latest_symbol_timesec
 
@@ -92,7 +94,7 @@ def main():
         if monteCarloModel.get_size() == 0: ## サイズが0の場合はリセット
             monteCarloModel.reset()
             positions = []
-            if force_stop_flag == 1:
+            if force_stop_flag is True:
                 Logger.info("Monte Carlo Size is 0 and Force Stopped Flag On")
                 return 0
 
@@ -215,6 +217,53 @@ def init():
 
     return 1
 
+def main_loop():
+    replaced_day = datetime.now().day
+    loop_cnt = 0
+    while True:
+        start_time = time.time()
+        now = datetime.now()
+        if main_process() == 0:
+            break
+        
+        if loop_cnt % 100:
+            margin_rate = mt5.account_info().margin
+            tradeHistoriesModel.check_and_replace_min_margin_rate(margin_rate)
+
+        if now.hour == 0 and now.minute == 0 and now.day != replaced_day:
+            replaced_day = now.day
+            monteCarloService.mail_daily_summary()
+
+        loop_cnt += 1
+
+        elapsed_time = time.time() - start_time
+        if elapsed_time < SLEEP_TIME: time.sleep(SLEEP_TIME - elapsed_time)
+
+        # await asyncio.sleep(1)  ## 非同期中にスリープ必須
+
+
+def handle_socket_commands():
+    global force_stop_flag
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind((SOCKET_HOST, SOCKET_PORT))
+    server_socket.listen(1)  # 1つの接続まで待ち受け
+   
+    while True:
+        client_socket, client_address = server_socket.accept()
+        command = client_socket.recv(1024).decode("utf-8")
+        if not command:
+            continue
+        
+        data = command.strip()
+        if data == "force_stop":
+            force_stop_flag = True
+            Logger.notice("Force Stop Socket Command Receive.")
+        else:
+            Logger.notice("Invalid Socket Command Receive. {}".format(command))
+
+        client_socket.close()
+
+
 if __name__ == "__main__":
     try:
         mt5.initialize()
@@ -222,35 +271,14 @@ if __name__ == "__main__":
         
         if init() == 0:
             raise Exception("Failed Init EA")
+        
+        server_thread = threading.Thread(target=handle_socket_commands, daemon=True)
+        server_thread.start()
 
-        replaced_day = datetime.now().day
-        loop_cnt = 0
-        while True:
-            start_time = time.time()
-            now = datetime.now()
-            if main() == 0:
-                break
-
-            # if socketHandler.is_recv_force_stop_cmd() is True:
-            #     force_stop_flag = True
-            
-            if loop_cnt % 100:
-                margin_rate = mt5.account_info().margin
-                tradeHistoriesModel.check_and_replace_min_margin_rate(margin_rate)
-
-            if now.hour == 0 and now.minute == 0 and now.day != replaced_day:
-                replaced_day = now.day
-                monteCarloService.mail_daily_summary()
-
-            loop_cnt += 1
-
-            elapsed_time = time.time() - start_time
-            if elapsed_time < SLEEP_TIME: time.sleep(SLEEP_TIME - elapsed_time)
-
+        main_loop()
         Logger.notice("shutdown expert {}".format(APP_NAME))
     except:
         Logger.error("異常終了\n\n{}".format(traceback.format_exc()))
     finally:
-        # socketHandler.close()
         mt5.shutdown()
         sys.exit()
