@@ -1,23 +1,25 @@
+import logging,os,sys
+from logging.handlers import TimedRotatingFileHandler
+import datetime
+
 class Logger():
     @staticmethod
-    def crit(text):
-        try:
-            raise("[Critical]" + text)
-        except Exception as e:
-            print(e)
-
-    @staticmethod
-    def error(text):
-        print("[ERROR]" + text)
-
-    @staticmethod
-    def warn(text):
-        print("[WARN]" + text)
-
-    @staticmethod
-    def notice(text):
-        print("[NOTICE]" + text)
-
-    @staticmethod
-    def summary(text):
-        print("[SUMMARY]" + text)
+    def get_logger(app_dir, app_name):
+        log_format = logging.Formatter(fmt=None, datefmt=None, style='%')
+        logger = logging.getLogger()
+        logger.setLevel(logging.INFO)
+        
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        stdout_handler.setFormatter(log_format)
+        logger.addHandler(stdout_handler)
+        
+        log_filename = app_name + datetime.datetime.today().strftime("%Y%m%d")
+        file_handler = logging.TimedRotatingFileHandler(
+            os.path.join(app_dir, "log", log_filename + ".log"), "a+",
+            when="D",
+            interval=31,
+            encoding="utf-8"
+        )
+        file_handler.setFormatter(log_format)
+        logger.addHandler(file_handler)
+        return logger

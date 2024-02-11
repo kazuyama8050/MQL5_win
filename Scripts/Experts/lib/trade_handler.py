@@ -63,12 +63,12 @@ class TradeHandler():
         }
 
         if retcode in retcode_msgs.keys():
-            self._logger.notice(retcode_msgs[retcode])
+            self._logger.info(retcode_msgs[retcode])
         else:
-            self._logger.notice("リクエスト処理にて予期せぬ異常が発生しました。")
+            self._logger.info("リクエスト処理にて予期せぬ異常が発生しました。")
 
         if retcode == mt5.TRADE_RETCODE_DONE:
-            self._logger.notice("<注文結果> 約定チケット：{0}、ポジションチケット：{1}、 ロット数：{2}、価格：{3}、コメント：{4}".format(
+            self._logger.info("<注文結果> 約定チケット：{0}、ポジションチケット：{1}、 ロット数：{2}、価格：{3}、コメント：{4}".format(
                     result.deal, result.order, result.volume, result.price, result.comment
                 )
             )

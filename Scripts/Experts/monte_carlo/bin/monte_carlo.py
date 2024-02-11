@@ -36,6 +36,8 @@ from feature_formatter_service import FeatureFormatterService
 model_conf = configparser.ConfigParser()
 model_conf.read(os.path.join(APP_DIR, "conf/monte_carlo_model.conf"))
 
+logger = Logger(APP_DIR, APP_HOME)
+
 def get_options():
     usage = "usage: %prog (Argument-1) [options]"
     parser = ArgumentParser(usage=usage)
@@ -71,13 +73,12 @@ model_types = {
 }
 MODEL_TYPE = options.model_type
 
-accountHandler = AccountHandler(ACCOUNT_ID, ACCOUNT_PASS, SERVER)
+accountHandler = AccountHandler(logger, ACCOUNT_ID, ACCOUNT_PASS, SERVER)
 symbolHandler = SymbolHandler(SYMBOL)
-tradeHandler = TradeHandler(Logger)
+tradeHandler = TradeHandler(logger)
 positionHandler = PositionHandler(SYMBOL, MAGIC_NUMBER)
 monteCarloModel = MonteCarloModel(BASE_LOT)
 monteCarloService = MonteCarloService(SYMBOL, BASE_PIPS, MAGIC_NUMBER)
-# socketHandler = SocketHandler(SOCKET_HOST, SOCKET_PORT)
 
 positions = []  ## ポジション情報配列（分解モンテカルロ法による数列がリセットされるとリセット）
 trained_model = None  ## 機械学習モデル init()で定義
@@ -95,7 +96,7 @@ def main_process():
             monteCarloModel.reset()
             positions = []
             if force_stop_flag is True:
-                Logger.info("Monte Carlo Size is 0 and Force Stopped Flag On")
+                logger.info("Monte Carlo Size is 0 and Force Stopped Flag On")
                 return 0
 
         if monteCarloModel.get_size() == 1: ## サイズが1の場合は分解
@@ -173,8 +174,6 @@ def main_process():
                 tradeHistoriesModel.add_loss_trade(tradeHistory)
             return 1
 
-            
-
         return 1
     except Exception as e:
         return 0
@@ -206,7 +205,7 @@ def init():
 
     accountHandler.login()
     if symbolHandler.is_trade_mode_full() == False:
-        Logger.error("Symbol Trade Mode Invalid.")
+        logger.error("Symbol Trade Mode Invalid.")
         return 0
     
     latest_symbol_timesec = symbolHandler.get_latest_time_msc()
@@ -230,6 +229,7 @@ def main_loop():
             margin_rate = mt5.account_info().margin
             tradeHistoriesModel.check_and_replace_min_margin_rate(margin_rate)
 
+        ## 日次処理
         if now.hour == 0 and now.minute == 0 and now.day != replaced_day:
             replaced_day = now.day
             monteCarloService.mail_daily_summary()
@@ -238,9 +238,7 @@ def main_loop():
 
         elapsed_time = time.time() - start_time
         if elapsed_time < SLEEP_TIME: time.sleep(SLEEP_TIME - elapsed_time)
-
-        # await asyncio.sleep(1)  ## 非同期中にスリープ必須
-
+        
 
 def handle_socket_commands():
     global force_stop_flag
@@ -257,9 +255,9 @@ def handle_socket_commands():
         data = command.strip()
         if data == "force_stop":
             force_stop_flag = True
-            Logger.notice("Force Stop Socket Command Receive.")
+            logger.info("Force Stop Socket Command Receive.")
         else:
-            Logger.notice("Invalid Socket Command Receive. {}".format(command))
+            logger.info("Invalid Socket Command Receive. {}".format(command))
 
         client_socket.close()
 
@@ -267,7 +265,7 @@ def handle_socket_commands():
 if __name__ == "__main__":
     try:
         mt5.initialize()
-        Logger.notice("start expert {}".format(APP_NAME))
+        logger.info("Start expert {}".format(APP_NAME))
         
         if init() == 0:
             raise Exception("Failed Init EA")
@@ -276,9 +274,10 @@ if __name__ == "__main__":
         server_thread.start()
 
         main_loop()
-        Logger.notice("shutdown expert {}".format(APP_NAME))
-    except:
-        Logger.error("異常終了\n\n{}".format(traceback.format_exc()))
+        logger.info("shutdown expert {}".format(APP_NAME))
+    except Exception as e:
+        logger.error("異常終了\n{0}\n{1}".format(e, traceback.format_exc()))
     finally:
         mt5.shutdown()
+        logger.info("End expert {}".format(APP_NAME))
         sys.exit()
