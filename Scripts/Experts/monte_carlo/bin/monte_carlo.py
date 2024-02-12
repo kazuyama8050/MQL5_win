@@ -206,6 +206,7 @@ def init():
     global positions
 
     accountHandler.login()
+        
     if symbolHandler.is_trade_mode_full() == False:
         logger.error("Symbol Trade Mode Invalid.")
         return 0

@@ -13,12 +13,20 @@ class AccountHandler():
         self._server = server
 
     def login(self, timeout = 60000):
-        authorized = mt5.login(self._account, password=self._passwd, server=self._server, timeout=timeout)
-        if authorized:
-            self._logger.info("ログインに成功しました。 アカウント: {}".format(self._account))
+        account_info = mt5.account_info()
+        if account_info is not None:
+            if account_info.login != ACCOUNT_ID:
+                self._logger.error("別アカウントがログイン中です。 ID: {}".format(ACCOUNT_ID))
+                raise Exception()
+            elif account_info.login == ACCOUNT_ID:
+                self._logger.info("既にログイン中です。")
         else:
-            self._logger.critical("ログインに失敗しました。 アカウント: {}".format(self._account))
-            raise Exception()
+            authorized = mt5.login(self._account, password=self._passwd, server=self._server, timeout=timeout)
+            if authorized:
+                self._logger.info("ログインに成功しました。 アカウント: {}".format(self._account))
+            else:
+                self._logger.critical("ログインに失敗しました。 アカウント: {}".format(self._account))
+                raise Exception()
         
     @staticmethod
     def to_trade_mode_jp(trade_mode):
