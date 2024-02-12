@@ -24,8 +24,11 @@ class MonteCarloService():
         self._symbolHandler = SymbolHandler(self._symbol)
 
     def calc_trade_flag(self, model, feature_df):
-        pred = model.predict(feature_df)
-        return PositionModel.BUYING_FLAG if pred >= 0.5 else PositionModel.SELLING_FLAG
+        try:
+            pred = model.predict(feature_df)
+            return PositionModel.BUYING_FLAG if float(pred[0]) >= 0.5 else PositionModel.SELLING_FLAG
+        except:
+            raise Exception("Falied calc_trade_flag")
     
     def calc_settlement(self, latest_position_trade_flag: int, latest_price: float, latest_position_price: float):
         is_settlement = False

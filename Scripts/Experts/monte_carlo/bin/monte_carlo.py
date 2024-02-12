@@ -95,6 +95,12 @@ def main_process():
     global latest_symbol_timesec
 
     try:
+        symbol_timesec_now = symbolHandler.get_latest_time_msc()
+        if latest_symbol_timesec >= symbol_timesec_now:  ## 価格が更新されていないときはスリープ
+            time.sleep(5)
+            return 1
+        latest_symbol_timesec = symbol_timesec_now
+
         if monteCarloModel.get_size() == 0: ## サイズが0の場合はリセット
             monteCarloModel.reset()
             positions = []
@@ -105,18 +111,10 @@ def main_process():
         if monteCarloModel.get_size() == 1: ## サイズが1の場合は分解
             monteCarloModel.decompose()
 
-        symbol_timesec_now = symbolHandler.get_latest_time_msc()
-        if latest_symbol_timesec >= symbol_timesec_now:  ## 市場が正常に開いていない（価格が更新されていない）ときはスリープ
-            logger.info("市場閉鎖")
-            time.sleep(60)
-            return 1
-        
-        latest_symbol_timesec = symbol_timesec_now
-
         if positionHandler.get_position_size_by_symbol_magic() == 0:
             if MODEL_TYPE == "decision_tree":
                 feature_df = _get_symbol_info_for_decision_tree_model()
-                            
+            
             order_request = monteCarloService.create_order_request(
                 monteCarloService.calc_trade_flag(trained_model, feature_df),
                 monteCarloModel.get_next_trade_lot(),
@@ -179,27 +177,28 @@ def main_process():
 
         return 1
     except Exception as e:
-        return 0
+        raise Exception()
     
 def _get_symbol_info_for_decision_tree_model():
-    moveing_history_term_list = model_conf.get(MODEL_TYPE, "moveing_history_term_list").split(",")
-    moveing_average_term_list = model_conf.get(MODEL_TYPE, "moveing_average_term_list").split(",")
-    bb_term_list = model_conf.get(MODEL_TYPE, "bb_term_list").split(",")
-    bb_sigma_list = model_conf.get(MODEL_TYPE, "bb_sigma_list").split(",")
-    macd_short_window_list = model_conf.get(MODEL_TYPE, "macd_short_window_list").split(",")
-    macd_long_window_list = model_conf.get(MODEL_TYPE, "macd_long_window_list").split(",")
-    macd_signal_window_list = model_conf.get(MODEL_TYPE, "macd_signal_window_list").split(",")
-    
+    moveing_history_term_list = [int(x) for x in model_conf.get(MODEL_TYPE, "moveing_history_term_list").split(",")]
+    moveing_average_term_list = [int(x) for x in model_conf.get(MODEL_TYPE, "moveing_average_term_list").split(",")]
+    bb_term_list = [int(x) for x in model_conf.get(MODEL_TYPE, "bb_term_list").split(",")]
+    bb_sigma_list = [int(x) for x in model_conf.get(MODEL_TYPE, "bb_sigma_list").split(",")]
+    macd_short_window_list = [int(x) for x in model_conf.get(MODEL_TYPE, "macd_short_window_list").split(",")]
+    macd_long_window_list = [int(x) for x in model_conf.get(MODEL_TYPE, "macd_long_window_list").split(",")]
+    macd_signal_window_list = [int(x) for x in model_conf.get(MODEL_TYPE, "macd_signal_window_list").split(",")]
     symbol_prices = symbolHandler.get_prices_by_pos(SymbolHandler.get_mt5_timeframe(TRAIN_TERM), max(moveing_history_term_list)+1)
     symbol_price_df = pd.DataFrame(symbol_prices, columns=["close"])
     
-    symbol_price_df = FeatureFormatterService.set_history_diff(symbol_price_df, moveing_history_term_list)
-    symbol_price_df = FeatureFormatterService.set_moving_average_indicators(symbol_price_df, moveing_average_term_list)
-    symbol_price_df = FeatureFormatterService.set_bb_indicators(symbol_price_df, bb_term_list, bb_sigma_list)
-    symbol_price_df = FeatureFormatterService.set_macd_indicators(symbol_price_df, macd_short_window_list, macd_long_window_list, macd_signal_window_list)
-    symbol_price_df.drop("close", axis=1, inplace=True)
-    
-    return symbol_price_df
+    symbol_price_df, history_diff_columns = FeatureFormatterService.set_history_diff(symbol_price_df, moveing_history_term_list)
+    symbol_price_df, ma_columns = FeatureFormatterService.set_moving_average_indicators(symbol_price_df, moveing_average_term_list)
+    symbol_price_df, bb_columns = FeatureFormatterService.set_bb_indicators(symbol_price_df, bb_term_list, bb_sigma_list)
+    symbol_price_df, macd_columns = FeatureFormatterService.set_macd_indicators(symbol_price_df, macd_short_window_list, macd_long_window_list, macd_signal_window_list)
+
+    feature_columns = history_diff_columns + ma_columns + bb_columns + macd_columns
+    feature_columns = sorted(feature_columns)
+    symbol_price_df = symbol_price_df[feature_columns]
+    return symbol_price_df.tail(1)
 
 def init():
     global latest_symbol_timesec
