@@ -15,10 +15,10 @@ class AccountHandler():
     def login(self, timeout = 60000):
         account_info = mt5.account_info()
         if account_info is not None:
-            if account_info.login != ACCOUNT_ID:
-                self._logger.error("別アカウントがログイン中です。 ID: {}".format(ACCOUNT_ID))
+            if account_info.login != self._account:
+                self._logger.error("別アカウントがログイン中です。 ID: {}".format(self._account))
                 raise Exception()
-            elif account_info.login == ACCOUNT_ID:
+            elif account_info.login == self._account:
                 self._logger.info("既にログイン中です。")
         else:
             authorized = mt5.login(self._account, password=self._passwd, server=self._server, timeout=timeout)
