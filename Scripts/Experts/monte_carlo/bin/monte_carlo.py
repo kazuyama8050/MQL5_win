@@ -238,7 +238,7 @@ def main_loop():
         ## 日次処理
         if now.hour == 0 and now.minute == 0 and now.day != replaced_day:
             replaced_day = now.day
-            monteCarloService.mail_daily_summary()
+            monteCarloService.mail_daily_summary(tradeHistoriesModel)
 
         loop_cnt += 1
 
