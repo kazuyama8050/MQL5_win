@@ -118,8 +118,9 @@ def main_process():
             order_request = monteCarloService.create_order_request(
                 monteCarloService.calc_trade_flag(trained_model, feature_df),
                 monteCarloModel.get_next_trade_lot(),
-                ""
+                "ポジション取得"
             )
+            logger.info("ポジション取得リクエスト送信")
 
             order_result = tradeHandler.order_request(order_request)
             if TradeHandler.is_market_closed(order_result.retcode):
@@ -155,6 +156,8 @@ def main_process():
                 "利益点到達" if is_benefit else "損失点到達"
             )
             order_result = tradeHandler.order_request(settlement_request)
+            logger.info("ポジション決済リクエスト送信")
+            
             if TradeHandler.is_market_closed(order_result.retcode):
                 time.sleep(30)
                 return 1
