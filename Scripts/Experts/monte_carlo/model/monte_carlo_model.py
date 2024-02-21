@@ -35,13 +35,14 @@ class MonteCarloModel():
     def decompose(self):
         if self.get_size() != 1: return
         number = self._monte_carlo_list[0]
+        self._monte_carlo_list = []
         if number == 0: raise Exception("invalid monte carlo list before decompose. monte_carlo_list: {}".format(self._monte_carlo_list))
         if number % 2 == 0:
-            self._monte_carlo_list[0] = number / 2
-            self._monte_carlo_list[1] = number / 2
+            self._monte_carlo_list.append(number / 2)
+            self._monte_carlo_list.append(number / 2)
         else:
-            self._monte_carlo_list[0] = math.floor(number)
-            self._monte_carlo_list[1] = math.ceil(number)
+            self._monte_carlo_list.append(math.floor(number))
+            self._monte_carlo_list.append(math.ceil(number))
             
 
     def _is_valid_size(self):
