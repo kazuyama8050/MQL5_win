@@ -4,9 +4,9 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 
 class MailHandler():
-    FROM_ADDRESS = "kazuki118050@gmail.com"
-    TO_ADDRESS = "kazuki118050@gmail.com"
-    MY_PASSWORD = "bsok wlbz usbr lpse"
+    FROM_ADDRESS = ""
+    TO_ADDRESS = ""
+    MY_PASSWORD = ""
 
     @staticmethod
     def send_mail(subject, mail_body):
